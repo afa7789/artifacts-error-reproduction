@@ -24,6 +24,8 @@ When running `hardhat test solidity`, Hardhat only compiles test files (from `te
 2. Even if artifacts exist from a previous `hardhat compile`, Hardhat 3 only loads artifacts from the "tests" scope (`cache/test-artifacts/`) into EDR, not from the "contracts" scope (`artifacts/contracts/`)
 3. `vm.getCode()` searches EDR's in-memory artifact collection, not the file system
 
+**Real-world impact:** This breaks the common pattern of `vm.getCode()` followed by contract deployment (as shown in Foundry docs), which is needed by tools like foundry-upgrades.
+
 **Root Cause:** Hardhat 3's `task-action.ts` only loads artifacts from the "tests" scope into EDR. There's no code to load artifacts from the "contracts" scope.
 
 **Fix Needed:** `hardhat test solidity` should compile main contracts (or load existing artifacts into EDR) before running tests.

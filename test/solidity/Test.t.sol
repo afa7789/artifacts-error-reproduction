@@ -42,5 +42,26 @@ contract TestContract is Test {
         // If we get here, the test passes (but it will fail in the scenario above)
         assertTrue(code.length > 0);
     }
+
+    function testGetCodeAndCreate() public {
+        // Real-world use case: Get bytecode and deploy contract
+        // This is what foundry-upgrades and similar tools need to do
+        // Example from Foundry docs: vm.getCode() then create
+        
+        bytes memory code = vm.getCode("SimpleContract.sol");
+        assertTrue(code.length > 0, "Failed to get contract bytecode");
+        
+        // Deploy the contract using the bytecode
+        SimpleContract deployed;
+        assembly {
+            deployed := create(0, add(code, 0x20), mload(code))
+        }
+        
+        require(address(deployed) != address(0), "Deployment failed");
+        
+        // Verify the contract works
+        deployed.setValue(42);
+        assertEq(deployed.value(), 42);
+    }
 }
 
