@@ -1,4 +1,5 @@
-# Minimal Reproduction: vm.getCode() Can't Find Main Contracts in Hardhat 3
+# Minimal Reproduction
+## vm.getCode() Can't Find Main Contracts in Hardhat 3
 
 This repository demonstrates a bug in Hardhat 3 where `vm.getCode()` fails to find artifacts from contracts in the `contracts/` directory.
 
