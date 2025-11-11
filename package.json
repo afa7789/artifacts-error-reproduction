@@ -1,0 +1,15 @@
+{
+  "name": "hardhat-vm-getcode-reproduction",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Minimal reproduction of vm.getCode() issue in Hardhat 3 - artifacts from contracts/ scope are not loaded into EDR",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test solidity test/solidity/Test.t.sol"
+  },
+  "devDependencies": {
+    "hardhat": "^3.0.0",
+    "forge-std": "github:foundry-rs/forge-std#v1.9.4"
+  }
+}
+
