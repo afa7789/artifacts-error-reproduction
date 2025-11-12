@@ -30,3 +30,7 @@ When running `hardhat test solidity`, Hardhat only compiles test files (from `te
 **Root Cause:** Hardhat 3's `task-action.ts` only loads artifacts from the "tests" scope into EDR. There's no code to load artifacts from the "contracts" scope.
 
 **Fix Needed:** `hardhat test solidity` should compile main contracts (or load existing artifacts into EDR) before running tests.
+
+## PR
+
+Nomic is working on it over this PR: https://github.com/NomicFoundation/hardhat/pull/7686
