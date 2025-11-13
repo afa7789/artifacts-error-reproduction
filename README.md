@@ -12,7 +12,7 @@ npm install
 ## Running
 
 ```bash
-npm run test:reproduce
+npm run test
 ```
 
 Expected output: `Error: no matching artifact found`

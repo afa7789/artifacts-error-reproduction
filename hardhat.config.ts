@@ -14,7 +14,7 @@ import type { HardhatUserConfig } from 'hardhat/config';
  */
 const config: HardhatUserConfig = {
   solidity: {
-    version: '0.8.20',
+    version: '0.8.22',
   },
   paths: {
     // Tell Hardhat where Solidity test files are located
