@@ -12,13 +12,13 @@ import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/trans
 
 /**
  * @title TestContract
- * @notice Tests demonstrando o problema do vm.getCode() com contratos de pacotes externos
+ * @notice Tests demonstrating the vm.getCode() issue with external package contracts
  */
 contract TestContract is Test {
     address constant CHEATCODE_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
     // ========================================================================
-    // [PASS] BASELINE: Testes que DEVEM passar (contratos locais)
+    // [PASS] BASELINE: Tests that SHOULD pass (local contracts)
     // ========================================================================
 
     function test_LOCAL_vmGetCode_SimpleContract_SHOULD_PASS() public view {
@@ -45,11 +45,11 @@ contract TestContract is Test {
     }
 
     // ========================================================================
-    // [FAIL] BUG EVIDENCE: Testes que DEVEM falhar (mostra o problema)
+    // [FAIL] BUG EVIDENCE: Tests that SHOULD fail (shows the problem)
     // ========================================================================
 
     function test_PACKAGE_vmGetCode_TransparentProxy_EXPECT_FAIL() public view {
-        // Este teste DEVE falhar - mostra o bug do Hardhat
+        // This test SHOULD fail - shows the Hardhat bug
         string memory contractName = "TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy";
         
         console.log("=== BUG DEMONSTRATION ===");
@@ -61,7 +61,7 @@ contract TestContract is Test {
     }
 
     function test_PACKAGE_vmGetCode_viaCheatcodeAddress_EXPECT_FAIL() public view {
-        // Testa usando o mesmo método que foundry-upgrades usa
+        // Tests using the same method that foundry-upgrades uses
         string memory contractName = "TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy";
         
         console.log("=== Testing foundry-upgrades pattern ===");
@@ -73,7 +73,7 @@ contract TestContract is Test {
     }
 
     function test_PACKAGE_deployTransparentProxy_EXPECT_FAIL() public {
-        // Este é o caso de uso real que quebra
+        // This is the real-world use case that breaks
         console.log("=== Real-world use case that fails ===");
         console.log("Attempting to deploy TransparentUpgradeableProxy for Greeter");
         
@@ -81,7 +81,7 @@ contract TestContract is Test {
         Options memory opts;
         opts.unsafeSkipAllChecks = true;
         
-        // Isto vai falhar porque TransparentUpgradeableProxy não está disponível
+        // This will fail because TransparentUpgradeableProxy is not available
         Upgrades.deployTransparentProxy(
             "Greeter.sol",
             testOwner,
@@ -91,7 +91,7 @@ contract TestContract is Test {
     }
 
     // ========================================================================
-    // [INFO] DIAGNOSTIC: Testes para mostrar exatamente o que está acontecendo
+    // [INFO] DIAGNOSTIC: Tests to show exactly what's happening
     // ========================================================================
 
     function test_DIAGNOSTIC_showArtifactAvailability() public view {
@@ -159,11 +159,11 @@ contract TestContract is Test {
     }
 
     // ========================================================================
-    // [PASS] WORKAROUND: Teste esperando erro (passa porque erro é esperado)
+    // [PASS] WORKAROUND: Test expecting error (passes because error is expected)
     // ========================================================================
 
     function test_WORKAROUND_expectRevert_onPackageContract_SHOULD_PASS() public {
-        // Este teste PASSA porque esperamos o erro
+        // This test PASSES because we expect the error
         console.log("=== Testing that package contracts fail (as expected) ===");
         
         vm.expectRevert();
