@@ -2,164 +2,175 @@
 pragma solidity ^0.8.20;
 
 import { Test } from "forge-std/Test.sol";
-// Import works fine - Hardhat resolves this at compile time from source files
+import { console } from "forge-std/console.sol";
+import { Vm } from "forge-std/Vm.sol";
 import { SimpleContract } from "../../contracts/SimpleContract.sol";
-
-// Import from external package - this also works at compile time
-// Note: The actual @openzeppelin/foundry-upgrades package doesn't include Greeter,
-// so we use a local Greeter contract that simulates the package import scenario.
-// The same issue occurs: contracts from packages (or contracts/ directory) are not
-// loaded into EDR's available_artifacts collection.
 import { Greeter } from "../../contracts/Greeter.sol";
-// Note: We don't import Upgrades/Options here because foundry-upgrades uses
-// Foundry-specific cheatcodes that don't exist in Hardhat. The core issue
-// (vm.getCode() failing for package contracts) is demonstrated by testGetCodeFromPackage().
-// import { Upgrades } from "@openzeppelin/foundry-upgrades/src/Upgrades.sol";
-// import { Options } from "@openzeppelin/foundry-upgrades/src/Options.sol";
+import { Upgrades } from "@openzeppelin/foundry-upgrades/src/Upgrades.sol";
+import { Options } from "@openzeppelin/foundry-upgrades/src/Options.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /**
  * @title TestContract
- * @notice Demonstrates that vm.getCode() fails for contracts in contracts/
- * 
- * This test file compiles to: cache/test-artifacts/test/solidity/Test.t.sol/TestContract.json
- * The artifact has sourceName: "test/solidity/Test.t.sol"
- * 
- * This artifact IS loaded into EDR because it's in the "tests" scope.
- * But SimpleContract.sol's artifact is NOT loaded because it's in "contracts" scope.
+ * @notice Tests demonstrando o problema do vm.getCode() com contratos de pacotes externos
  */
 contract TestContract is Test {
-    /**
-     * @notice This test will FAIL with "no matching artifact found"
-     * 
-     * Why it fails:
-     * 1. SimpleContract.sol compiles to artifacts/contracts/SimpleContract.sol/SimpleContract.json
-     * 2. Hardhat 3 only loads artifacts from cache/test-artifacts/ (tests scope)
-     * 3. Artifacts from artifacts/contracts/ (contracts scope) are never loaded into EDR
-     * 4. vm.getCode() searches EDR's available_artifacts collection
-     * 5. SimpleContract.sol is not in that collection, so it fails
-     * 
-     * Note: The import above works fine because Hardhat resolves imports from source files.
-     * But vm.getCode() needs artifacts to be loaded into EDR's memory, which doesn't happen.
-     */
-    function testGetCode() public view {
-        // This will fail with "Error: no matching artifact found" when:
-        // 1. Running `hardhat test solidity` without compiling first, OR
-        // 2. When Hardhat doesn't load artifacts from contracts/ scope into EDR
-        //
-        // The issue: Hardhat's `test solidity` command only compiles test files,
-        // not main contracts. Even if artifacts exist from a previous compilation,
-        // they may not be loaded into EDR's available_artifacts collection.
+    address constant CHEATCODE_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
+
+    // ========================================================================
+    // [PASS] BASELINE: Testes que DEVEM passar (contratos locais)
+    // ========================================================================
+
+    function test_LOCAL_vmGetCode_SimpleContract_SHOULD_PASS() public view {
         bytes memory code = vm.getCode("SimpleContract.sol");
-        
-        // If we get here, the test passes (but it will fail in the scenario above)
-        assertTrue(code.length > 0);
+        assertTrue(code.length > 0, "Local contract should be found");
     }
 
-    function testGetCodeAndCreate() public {
-        // Real-world use case: Get bytecode and deploy contract
-        // This is what foundry-upgrades and similar tools need to do
-        // Example from Foundry docs: vm.getCode() then create
-        
+    function test_LOCAL_vmGetCode_Greeter_SHOULD_PASS() public view {
+        bytes memory code = vm.getCode("Greeter.sol");
+        assertTrue(code.length > 0, "Local contract should be found");
+    }
+
+    function test_LOCAL_deployWithVmGetCode_SHOULD_PASS() public {
         bytes memory code = vm.getCode("SimpleContract.sol");
-        assertTrue(code.length > 0, "Failed to get contract bytecode");
-        
-        // Encode constructor arguments and append to bytecode
         uint256 initialValue = 100;
-        bytes memory constructorArgs = abi.encode(initialValue);
-        bytes memory deploymentBytecode = abi.encodePacked(code, constructorArgs);
+        bytes memory deploymentBytecode = abi.encodePacked(code, abi.encode(initialValue));
         
-        // Deploy the contract using the bytecode with constructor arguments
         SimpleContract deployed;
         assembly {
             deployed := create(0, add(deploymentBytecode, 0x20), mload(deploymentBytecode))
         }
         
-        require(address(deployed) != address(0), "Deployment failed");
-        
-        // Verify the contract works - check initial value from constructor
-        assertEq(deployed.value(), initialValue);
-        
-        // Update and verify
-        deployed.setValue(42);
-        assertEq(deployed.value(), 42);
+        assertEq(deployed.value(), initialValue, "Deployed contract should work");
     }
 
-    /**
-     * @notice This test demonstrates the issue when importing contracts from external packages
-     * 
-     * When importing contracts from packages (e.g., openzeppelin/foundry-upgrades),
-     * the same issue occurs: vm.getCode() cannot find the artifact because:
-     * 
-     * 1. Contracts from packages are compiled to artifacts in node_modules/...
-     * 2. Hardhat 3 only loads artifacts from cache/test-artifacts/ (tests scope)
-     * 3. Artifacts from packages are NOT loaded into EDR's available_artifacts collection
-     * 4. vm.getCode() searches EDR's in-memory artifact collection, not the file system
-     * 5. The contract from the package is not in that collection, so it fails
-     * 
-     * This is a real-world scenario that breaks tools like foundry-upgrades when they try to:
-     * - Import contracts from packages
-     * - Use vm.getCode() to get their bytecode for deployment
-     * - Deploy proxies using upgrade libraries
-     * 
-     * Note: The import works fine because Hardhat resolves imports from source files.
-     * But vm.getCode() needs artifacts to be loaded into EDR's memory, which doesn't happen.
-     */
-    function testGetCodeFromPackage() public view {
-        // This will fail with "Error: no matching artifact found" because:
-        // 1. Greeter is imported from a package (simulated with local contract)
-        // 2. The package contract's artifact is not loaded into EDR
-        // 3. vm.getCode() cannot find it in the available_artifacts collection
+    // ========================================================================
+    // [FAIL] BUG EVIDENCE: Testes que DEVEM falhar (mostra o problema)
+    // ========================================================================
+
+    function test_PACKAGE_vmGetCode_TransparentProxy_EXPECT_FAIL() public view {
+        // Este teste DEVE falhar - mostra o bug do Hardhat
+        string memory contractName = "TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy";
         
-        // Try to get bytecode for Greeter
-        // When importing from a package, the path format would be something like:
-        // "package-name/path/to/contract.sol:ContractName"
-        // But since we're using a local contract that simulates the package scenario,
-        // we use the local path. The same issue occurs - the artifact is not loaded into EDR.
-        bytes memory code = vm.getCode("Greeter.sol");
+        console.log("=== BUG DEMONSTRATION ===");
+        console.log("Trying to get code for:", contractName);
+        console.log("Note: This contract is imported and compiled, but vm.getCode() will fail");
         
-        // If we get here, the test passes (but it will fail in the scenario above)
-        assertTrue(code.length > 0, "Failed to get contract bytecode from package");
+        bytes memory code = vm.getCode(contractName);
+        assertTrue(code.length > 0, "EXPECTED TO FAIL: Package contract artifacts not loaded in EDR");
     }
 
-    /**
-     * @notice This test demonstrates the issue when using upgrade libraries with package contracts
-     * 
-     * This is the exact scenario mentioned in the issue: when using upgrade libraries (like
-     * foundry-upgrades) to deploy a proxy for a contract imported from a package,
-     * vm.getCode() fails internally.
-     * 
-     * Upgrade libraries internally use vm.getCode() to get the implementation contract's
-     * bytecode, which fails for package contracts.
-     * 
-     * NOTE: This test is commented out because foundry-upgrades uses Foundry-specific
-     * cheatcodes (like vm.contains) that don't exist in Hardhat's Vm interface.
-     * However, the core issue is the same: vm.getCode() cannot find artifacts from packages.
-     * 
-     * This test would FAIL because:
-     * 1. Upgrade libraries internally call vm.getCode() to get the contract bytecode
-     * 2. vm.getCode() cannot find Greeter's artifact because it's from a package
-     * 3. The artifact is not loaded into EDR's available_artifacts collection
-     * 
-     * Even with unsafeSkipAllChecks = true, the deployment would fail at the vm.getCode() step
-     * because the artifact lookup happens before any validation checks.
-     */
-    // function testProxyAdminCheck_skipAll() public {
-    //     // This test demonstrates the scenario where upgrade libraries fail when
-    //     // trying to deploy proxies for contracts imported from packages.
-    //     // 
-    //     // The core issue is that vm.getCode() cannot find the artifact, which
-    //     // is demonstrated by the testGetCodeFromPackage() test above.
-    //     
-    //     // address testOwner = address(0x1234);
-    //     // Options memory opts;
-    //     // opts.unsafeSkipAllChecks = true;
-    //     // 
-    //     // Upgrades.deployTransparentProxy(
-    //     //     "Greeter.sol",
-    //     //     testOwner,
-    //     //     abi.encodeCall(Greeter.initialize, (testOwner, "hello")),
-    //     //     opts
-    //     // );
-    // }
+    function test_PACKAGE_vmGetCode_viaCheatcodeAddress_EXPECT_FAIL() public view {
+        // Testa usando o mesmo método que foundry-upgrades usa
+        string memory contractName = "TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy";
+        
+        console.log("=== Testing foundry-upgrades pattern ===");
+        console.log("Using Vm(CHEATCODE_ADDRESS).getCode()");
+        
+        Vm vmInstance = Vm(CHEATCODE_ADDRESS);
+        bytes memory code = vmInstance.getCode(contractName);
+        assertTrue(code.length > 0, "EXPECTED TO FAIL: Package contract not found via cheatcode address");
+    }
+
+    function test_PACKAGE_deployTransparentProxy_EXPECT_FAIL() public {
+        // Este é o caso de uso real que quebra
+        console.log("=== Real-world use case that fails ===");
+        console.log("Attempting to deploy TransparentUpgradeableProxy for Greeter");
+        
+        address testOwner = address(0x1234);
+        Options memory opts;
+        opts.unsafeSkipAllChecks = true;
+        
+        // Isto vai falhar porque TransparentUpgradeableProxy não está disponível
+        Upgrades.deployTransparentProxy(
+            "Greeter.sol",
+            testOwner,
+            abi.encodeCall(Greeter.initialize, (testOwner, "hello")),
+            opts
+        );
+    }
+
+    // ========================================================================
+    // [INFO] DIAGNOSTIC: Testes para mostrar exatamente o que está acontecendo
+    // ========================================================================
+
+    function test_DIAGNOSTIC_showArtifactAvailability() public view {
+        console.log("\n=== DIAGNOSTIC: Artifact Availability ===\n");
+        
+        string[6] memory contracts = [
+            "SimpleContract.sol",
+            "Greeter.sol", 
+            "TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
+            "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
+            "contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
+            "node_modules/@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy"
+        ];
+        
+        for (uint i = 0; i < contracts.length; i++) {
+            console.log("Trying:", contracts[i]);
+            try vm.getCode(contracts[i]) returns (bytes memory code) {
+                console.log("  [FOUND] Length:", code.length);
+            } catch {
+                console.log("  [NOT FOUND]");
+            }
+            console.log("");
+        }
+    }
+
+    function test_DIAGNOSTIC_compareMethods() public view {
+        console.log("\n=== DIAGNOSTIC: Comparing vm.getCode() methods ===\n");
+        
+        string memory packageContract = "TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy";
+        string memory localContract = "Greeter.sol";
+        
+        // Test package contract
+        console.log("Package contract:", packageContract);
+        console.log("  Method 1 (vm.getCode()):");
+        try vm.getCode(packageContract) returns (bytes memory) {
+            console.log("    [SUCCESS]");
+        } catch {
+            console.log("    [FAILED]");
+        }
+        
+        console.log("  Method 2 (Vm(CHEATCODE_ADDRESS).getCode()):");
+        try Vm(CHEATCODE_ADDRESS).getCode(packageContract) returns (bytes memory) {
+            console.log("    [SUCCESS]");
+        } catch {
+            console.log("    [FAILED]");
+        }
+        
+        console.log("");
+        
+        // Test local contract  
+        console.log("Local contract:", localContract);
+        console.log("  Method 1 (vm.getCode()):");
+        try vm.getCode(localContract) returns (bytes memory) {
+            console.log("    [SUCCESS]");
+        } catch {
+            console.log("    [FAILED]");
+        }
+        
+        console.log("  Method 2 (Vm(CHEATCODE_ADDRESS).getCode()):");
+        try Vm(CHEATCODE_ADDRESS).getCode(localContract) returns (bytes memory) {
+            console.log("    [SUCCESS]");
+        } catch {
+            console.log("    [FAILED]");
+        }
+    }
+
+    // ========================================================================
+    // [PASS] WORKAROUND: Teste esperando erro (passa porque erro é esperado)
+    // ========================================================================
+
+    function test_WORKAROUND_expectRevert_onPackageContract_SHOULD_PASS() public {
+        // Este teste PASSA porque esperamos o erro
+        console.log("=== Testing that package contracts fail (as expected) ===");
+        
+        vm.expectRevert();
+        this.tryGetCodeForPackageContract();
+    }
+
+    function tryGetCodeForPackageContract() external view {
+        vm.getCode("TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy");
+    }
 }
-
