@@ -15,6 +15,16 @@ import type { HardhatUserConfig } from 'hardhat/config';
 const config: HardhatUserConfig = {
   solidity: {
     version: '0.8.22',
+    // Generate artifacts from npm dependencies
+    // This allows vm.getCode() to find contracts from packages like @openzeppelin/contracts
+    // See: https://hardhat.org/docs/guides/configuring-the-compiler#generating-artifacts-from-npm-dependencies
+    npmFilesToBuild: [
+      "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol",
+      "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol",
+      "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol",
+      "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol",
+      "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol",
+    ],
   },
   paths: {
     // Tell Hardhat where Solidity test files are located

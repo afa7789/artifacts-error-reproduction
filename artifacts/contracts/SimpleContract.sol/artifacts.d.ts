@@ -15,7 +15,7 @@ export interface SimpleContract$Type {
   readonly deployedLinkReferences: {};
   readonly immutableReferences: {};
   readonly inputSourceName: "project/contracts/SimpleContract.sol";
-  readonly buildInfoId: "solc-0_8_22-eb8e8a43e7e2b14528ab5d2ed886e7942b419852";
+  readonly buildInfoId: "solc-0_8_22-51abab821755ff8b82001ffc20d975ec868e2128";
 };
 
 import "hardhat/types/artifacts";
